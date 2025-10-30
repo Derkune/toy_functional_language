@@ -3,14 +3,14 @@ Pure functional language:
 - Each function is represented both with it's declaration and it's calls. When a function is declared, it is a square of tiles. When a function is called, it is a singular tile. All functions are in global scope. This implies recursion and cross-recursion.
 - Constants are just functions with 0 inputs. "Pipes" are fundamentally just the identity function, but with the added benefit of being able to be crossed in the graphical view. Pipes are directional.
 - Pipes can be split off, but not united. Specifically, this means that 1 output can serve to many different inputs, but each input needs to come from 1 output.
-- For each function call, each input side can be specified to be either lazy or eager, and sides of the declaration view can be 1-to-1 arbitrarily mapped to sides of the call view.
+- For each function call, sides of the declaration view can be 1-to-1 arbitrarily mapped to sides of the call view.
 - The point of entry is just another function declaration with a special name. (in case of an esolang, inputs of the main function correspond to command line args. in case of a zachlike, inputs correspond to test cases of a level specification.)
 - There are 2 data types: the integer, and the immutable list (can contain other lists).
 - A list "constructor" is just the empty list constant.
 - Every operation looks like a function call.
 - Fundamental operations: choice, comparison, addition, subtraction.
 
-- choice function is best used with lazy evaluation for arguments B,C.
+- choice function is the only fundamental function with lazy evaluation of arguments B and C.
 choice table:
 A↓?B,C      |
 int         |{nonzero, zero} maps to {B,C}
@@ -45,7 +45,7 @@ return EXPONENTIATE(N, N)
 EXPONENTIATE BASE, POWER:
 return choice(
     POWER,
-    <lazy> MULTIPLY(
+    MULTIPLY(
         BASE,
         EXPONENTIATE(
             BASE,
@@ -58,7 +58,7 @@ return choice(
 MULTIPLY A, B:
 return choice(
     B,
-    <lazy> MULTIPLY(
+    MULTIPLY(
         A,
         B-1
     ) + A,
@@ -78,7 +78,7 @@ ELEMENT_AT_FOUND_IDX <- IDX_OF_MAX_ELEMENT - LEFTOVER_LIST  // list accessor
 
 return choice(
     LEFTOVER_LIST,
-    <lazy> SORT(
+    SORT(
         LEFTOVER_LIST_WITHOUT_FOUND_IDX
     ) + ELEMENT_AT_FOUND_IDX,   // appending to list from recursive call
     EMPTY_LIST()
@@ -100,7 +100,7 @@ NEW_FOUND_ITEM <- choice(
 
 return choice(
     LIST,
-    <lazy> FIND_IDX_OF_MAX_POSITIVE_ELEMENT(
+    FIND_IDX_OF_MAX_POSITIVE_ELEMENT(
         LIST - 1,
         ITER_IDX + 1,
         NEW_FOUND_IDX,
