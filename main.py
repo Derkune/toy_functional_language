@@ -56,7 +56,7 @@ def Lang_minus(a: LangType, b: LangType) -> LangType:
         b = max(0, b)
         b = min(len(a) - 1, b)
 
-        a = a[:b] + a[b:]
+        a = a[:b] + a[b + 1 :]
         return a
     else:
         assert isinstance(a, int), "wrong type in Lang_minus"
@@ -69,6 +69,10 @@ def Lang_minus(a: LangType, b: LangType) -> LangType:
         a = min(len(b) - 1, a)
 
         return b[a]
+    
+
+def Lang_nesting(val: LangType) -> LangType:
+    return (val, )
 
 
 def main():
