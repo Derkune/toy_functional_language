@@ -19,7 +19,7 @@ There are 2 data types: the **integer**, and the **immutable list** (can contain
 
 ## Operations
 Every operation looks like a function call.
-Fundamental operations: `?choice`, `=comparison`, `+addition`, `-subtraction`, `~nesting`.
+Fundamental operations: `?choice`, `>=comparison`, `+addition`, `-subtraction`, `~nesting`.
 
 - `choice` function is the only fundamental function with lazy evaluation of arguments B and C. This is necessary for recursion termination.
 
