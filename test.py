@@ -97,6 +97,63 @@ def test_2() -> None:
     pass
 
 
+def fib_trace_gen(n: int):
+    """
+    A recursive generator that calculates fib(n) and yields its execution trace.
+
+    Yields: A tuple of (trace_string, depth_level)
+    Returns: The integer result of fib(n)
+    """
+    # We'll use a helper to manage the call depth for nice indented printing
+    def _fib_helper(n: int, depth: int):
+        indent = "  " * depth
+        yield (f"{indent}-> Calling fib({n})", depth)
+
+        # Base Case
+        if n <= 1:
+            yield (f"{indent}   Base case, returning {n}", depth)
+            return n
+
+        # Recursive Step 1: Call fib(n-1)
+        # The 'yield from' will delegate to the recursive call, yielding all its trace steps.
+        # When it's done, its 'return' value is captured in 'res1'.
+        res1 = yield from _fib_helper(n - 1, depth + 1)
+        yield (f"{indent}<- Resumed fib({n}). Got {res1} from fib({n-1}) call.", depth)
+
+        # Recursive Step 2: Call fib(n-2)
+        res2 = yield from _fib_helper(n - 2, depth + 1)
+        yield (f"{indent}<- Resumed fib({n}). Got {res2} from fib({n-2}) call.", depth)
+
+        # Final result calculation
+        final_result = res1 + res2
+        yield (f"{indent}<- Returning {final_result} for fib({n})", depth)
+        return final_result
+
+    # Start the helper from the top level (depth 0)
+    final_value  = yield from _fib_helper(n, 0)
+    return final_value
+
+
+def run_and_get_result(gen_obj):
+    """
+    Consumes a generator that yields traces and returns its final value.
+    """
+    while True:
+        try:
+            # Get the next yielded item
+            aaa = next(gen_obj)
+            # Optional: Do something with the yielded item, like print it
+            print(aaa)
+        except StopIteration as e:
+            # The generator is exhausted. The return value is in e.value.
+            # We break the loop and return this value.
+            return e.value
+  
+gen = fib_trace_gen(10)
+result = run_and_get_result(gen)
+print(result)
+
+
 if __name__ == "__main__":
     test_1()
     test_2()
