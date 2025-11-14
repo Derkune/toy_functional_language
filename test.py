@@ -1,3 +1,5 @@
+from typing import Dict
+
 from main import (
     LangType,
     Lang_choice_comparison,
@@ -5,6 +7,13 @@ from main import (
     Lang_plus,
     Lang_minus,
     Lang_nesting,
+    Function,
+    ENTRY_POINT,
+    ARG1,
+    ARG0,
+    PossibleFunc,
+    OperationPlus,
+    execute_entry,
 )
 
 
@@ -104,6 +113,7 @@ def fib_trace_gen(n: int):
     Yields: A tuple of (trace_string, depth_level)
     Returns: The integer result of fib(n)
     """
+
     # We'll use a helper to manage the call depth for nice indented printing
     def _fib_helper(n: int, depth: int):
         indent = "  " * depth
@@ -130,7 +140,7 @@ def fib_trace_gen(n: int):
         return final_result
 
     # Start the helper from the top level (depth 0)
-    final_value  = yield from _fib_helper(n, 0)
+    final_value = yield from _fib_helper(n, 0)
     return final_value
 
 
@@ -148,12 +158,47 @@ def run_and_get_result(gen_obj):
             # The generator is exhausted. The return value is in e.value.
             # We break the loop and return this value.
             return e.value
-  
-gen = fib_trace_gen(10)
-result = run_and_get_result(gen)
-print(result)
+
+
+def test_3():
+    gen = fib_trace_gen(10)
+    result = run_and_get_result(gen)
+    print(result)
+
+
+def test_4():
+    function1: Function = Function(
+        symbol_mapping={
+            (0, 0): "+",
+            (-1, 0): "+",
+            (1, 0): "+",
+            (-2, 0): "7",
+            (2, 0): "8",
+        },
+        input_mapping={
+            ENTRY_POINT: [(0, 0)],
+            (0, 0): [(-1, 0), (1, 0)],
+            (-1, 0): [(-2, 0), ARG0],
+            (1, 0): [(2, 0), ARG1],
+        },
+        input_positions=[
+            ARG0,
+            ARG1,
+        ],
+    )
+
+    function_mapping: Dict[str, PossibleFunc] = {
+        "+": OperationPlus(),
+        "f1": function1,
+        "7": 7,
+        "8": 8,
+    }
+
+    execute_entry(function1, ENTRY_POINT, function_mapping, [1, 2])
 
 
 if __name__ == "__main__":
     test_1()
     test_2()
+    test_3()
+    test_4()

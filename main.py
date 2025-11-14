@@ -340,22 +340,6 @@ def execute_entry(
 def main():
     print("Hello from toy-functional-language!")
 
-    function1: Function = Function(
-        symbol_mapping={(0, 0): "+"},
-        input_mapping={
-            ENTRY_POINT: [(0, 0)],
-            (0, 0): [ARG0, ARG1],
-        },
-        input_positions=[ARG0, ARG1],
-    )
-
-    function_mapping: Dict[str, PossibleFunc] = {
-        "+": OperationPlus(),
-        "f1": function1,
-    }
-
-    execute_entry(function1, ENTRY_POINT, function_mapping, [1, 2])
-
     print("exit from toy-functional-language")
 
 
