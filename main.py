@@ -135,39 +135,90 @@ class ChoosePrimitive:
 PossibleFunc = Union[Operation, Constant, Function, ChoosePrimitive]
 
 
+def _resolve_all_inputs(
+    current_func: FunctionFrame,
+    input_positions: List[Position],
+    function_mapping: Dict[str, PossibleFunc],
+) -> List[Constant]:
+    """Recursively executes all inputs and returns the resulting constants."""
+    return [
+        execute(current_func, input_pos, function_mapping)
+        for input_pos in input_positions
+    ]
+
+
+def _handle_choose(
+    current_func: FunctionFrame,
+    choose_op: ChoosePrimitive,
+    input_positions: List[Position],
+    function_mapping: Dict[str, PossibleFunc],
+) -> Constant:
+    """Handles the lazy evaluation of the ChoosePrimitive."""
+    resolved_condition = execute(current_func, input_positions[0], function_mapping)
+    chosen_pos = choose_op(resolved_condition, input_positions[1], input_positions[2])
+    return execute(current_func, chosen_pos, function_mapping)
+
+
+def _handle_operation(
+    current_func: FunctionFrame,
+    operation: Operation,
+    input_positions: List[Position],
+    function_mapping: Dict[str, PossibleFunc],
+) -> Constant:
+    """Resolves all inputs and applies the operation to them."""
+    resolved_inputs = _resolve_all_inputs(
+        current_func, input_positions, function_mapping
+    )
+    return operation(*resolved_inputs)
+
+
+def _handle_user_function(
+    current_func: FunctionFrame,
+    user_function: Function,
+    input_positions: List[Position],
+    function_mapping: Dict[str, PossibleFunc],
+) -> Constant:
+    """Resolves all inputs and executes a user-defined function in a new frame."""
+    resolved_inputs = _resolve_all_inputs(
+        current_func, input_positions, function_mapping
+    )
+    new_frame = FunctionFrame(user_function, resolved_inputs)
+    return execute(new_frame, ENTRY_POINT, function_mapping)
+
+
 def execute(
     current_func: FunctionFrame,
     pos: Position,
     function_mapping: Dict[str, PossibleFunc],
 ) -> Constant:
-    input_positions = current_func.function_reference.input_mapping[pos]
+    """
+    Evaluates the function at a given position within a given frame.
+
+    This function acts as a dispatcher, determining the type of operation/function
+    at the specified position and delegating to a specialized handler function.
+    """
     symbol_on_pos = current_func.get_symbol_for_pos(pos)
     function_on_pos = function_mapping[symbol_on_pos]
 
+    if isinstance(function_on_pos, Constant):
+        return function_on_pos
+
+    input_positions = current_func.function_reference.input_mapping[pos]
+
     if isinstance(function_on_pos, ChoosePrimitive):
-        choose_op = function_on_pos
-
-        resolved_zeroth_input = execute(
-            current_func, input_positions[0], function_mapping
+        return _handle_choose(
+            current_func, function_on_pos, input_positions, function_mapping
         )
-        chosen_argument_to_resolve_pos = choose_op(
-            resolved_zeroth_input, input_positions
+    elif isinstance(function_on_pos, Operation):
+        return _handle_operation(
+            current_func, function_on_pos, input_positions, function_mapping
         )
-        return execute(current_func, chosen_argument_to_resolve_pos, function_mapping)
-    elif isinstance(function_on_pos, Constant):
-        constant = function_on_pos
-        return constant
-
-    resolved_inputs: List[Constant] = []
-    for input_pos in input_positions:
-        resolved_inputs.append(execute(current_func, input_pos, function_mapping))
-
-    if isinstance(function_on_pos, Operation):
-        operation = function_on_pos
-        return operation(resolved_inputs)
+    elif isinstance(function_on_pos, Function):
+        return _handle_user_function(
+            current_func, function_on_pos, input_positions, function_mapping
+        )
     else:
-        new_frame = FunctionFrame(function_on_pos, resolved_inputs)
-        return execute(new_frame, ENTRY_POINT, function_mapping)
+        raise TypeError(f"Unexpected type at position {pos}: {type(function_on_pos)}")
 
 
 def main():
