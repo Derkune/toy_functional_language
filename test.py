@@ -248,7 +248,7 @@ def test_5():
         "1": 1,
     }
 
-    execute_entry(function1, function_mapping, [5])
+    execute_entry(function1, function_mapping, [3])
 
 
 if __name__ == "__main__":

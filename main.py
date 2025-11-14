@@ -252,8 +252,8 @@ PossibleFunc = Union[Operation, LangType, Function, ChoosePrimitive]
 
 class YieldType(enum.Enum):
     FUNCTION_ENTRY = enum.auto()
-    RECURSIVE_CALL = enum.auto()
-    GOT_BACK_FROM_RECURSIVE_CALL = enum.auto()
+    FUNCTION_CALL = enum.auto()
+    GOT_BACK_FROM_FUNCTION_CALL = enum.auto()
     RETURN = enum.auto()
 
 
@@ -361,7 +361,7 @@ def _execute_gen(
     input_positions = current_func.function_reference.input_mapping[pos]
 
     if isinstance(function_on_pos, ChoosePrimitive):
-        yield YieldData(YieldType.RECURSIVE_CALL, call_depth, str(function_on_pos))
+        yield YieldData(YieldType.FUNCTION_CALL, call_depth, str(function_on_pos))
         choose_val = yield from _handle_choose_gen(
             current_func,
             function_on_pos,
@@ -370,14 +370,14 @@ def _execute_gen(
             call_depth,
         )
         yield YieldData(
-            YieldType.GOT_BACK_FROM_RECURSIVE_CALL,
+            YieldType.GOT_BACK_FROM_FUNCTION_CALL,
             call_depth,
             str(function_on_pos),
         )
         yield YieldData(YieldType.RETURN, call_depth, str(choose_val))
         return choose_val
     elif isinstance(function_on_pos, Operation):
-        yield YieldData(YieldType.RECURSIVE_CALL, call_depth, str(function_on_pos))
+        yield YieldData(YieldType.FUNCTION_CALL, call_depth, str(function_on_pos))
         op_val = yield from _handle_operation_gen(
             current_func,
             function_on_pos,
@@ -386,14 +386,14 @@ def _execute_gen(
             call_depth,
         )
         yield YieldData(
-            YieldType.GOT_BACK_FROM_RECURSIVE_CALL,
+            YieldType.GOT_BACK_FROM_FUNCTION_CALL,
             call_depth,
             str(function_on_pos),
         )
         yield YieldData(YieldType.RETURN, call_depth, str(op_val))
         return op_val
     elif isinstance(function_on_pos, Function):
-        yield YieldData(YieldType.RECURSIVE_CALL, call_depth, str(function_on_pos))
+        yield YieldData(YieldType.FUNCTION_CALL, call_depth, str(function_on_pos))
         func_val = yield from _handle_user_function_gen(
             current_func,
             function_on_pos,
@@ -402,7 +402,7 @@ def _execute_gen(
             call_depth,
         )
         yield YieldData(
-            YieldType.GOT_BACK_FROM_RECURSIVE_CALL,
+            YieldType.GOT_BACK_FROM_FUNCTION_CALL,
             call_depth,
             str(function_on_pos),
         )
