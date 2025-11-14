@@ -14,6 +14,10 @@ from main import (
     PossibleFunc,
     OperationPlus,
     execute_entry,
+    OperationCompare,
+    OperationMinus,
+    OperationNest,
+    ChoosePrimitive,
 )
 
 
@@ -185,6 +189,7 @@ def test_4():
             ARG0,
             ARG1,
         ],
+        symbol="f1",
     )
 
     function_mapping: Dict[str, PossibleFunc] = {
@@ -197,8 +202,58 @@ def test_4():
     execute_entry(function1, function_mapping, [1, 2])
 
 
+def seq_gen(n: int) -> tuple:
+    assert n >= 0
+
+    if n != 0:
+        return (n,) + seq_gen(n - 1)
+    else:
+        return (n,)
+
+
+def test_5():
+    CHOOSE = (1, 1)
+    NEST_ARG0 = (2, 2)
+    ADD_IN_RECURSIVE_STEP = (3, 3)
+    RECURSIVE_CALL = (4, 4)
+    SUBTRACT_1_FROM_ARG0 = (5, 5)
+    ONE = (6, 6)
+
+    function1 = Function(
+        symbol="f1",
+        symbol_mapping={
+            CHOOSE: "?",
+            NEST_ARG0: "~",
+            ADD_IN_RECURSIVE_STEP: "+",
+            RECURSIVE_CALL: "f1",
+            SUBTRACT_1_FROM_ARG0: "-",
+            ONE: "1",
+        },
+        input_mapping={
+            ENTRY_POINT: [CHOOSE],
+            CHOOSE: [ARG0, ADD_IN_RECURSIVE_STEP, NEST_ARG0],
+            ADD_IN_RECURSIVE_STEP: [NEST_ARG0, RECURSIVE_CALL],
+            NEST_ARG0: [ARG0],
+            RECURSIVE_CALL: [SUBTRACT_1_FROM_ARG0],
+            SUBTRACT_1_FROM_ARG0: [ARG0, ONE],
+        },
+        input_positions=[ARG0],
+    )
+    function_mapping: Dict[str, PossibleFunc] = {
+        "f1": function1,
+        "+": OperationPlus(),
+        "~": OperationNest(),
+        "?": ChoosePrimitive(),
+        "-": OperationMinus(),
+        "1": 1,
+    }
+
+    execute_entry(function1, function_mapping, [5])
+
+
 if __name__ == "__main__":
     # test_1()
     # test_2()
     # test_3()
-    test_4()
+    # test_4()
+    test_5()

@@ -122,6 +122,10 @@ class Function:
     """Mapping from positions of function calls to tuples of function calls on which they depend"""
     input_positions: List[SpecialPosition]
     """List of places where the argument values will be placed in FunctionFrame on evaluation"""
+    symbol: str
+
+    def __str__(self) -> str:
+        return f"{self.symbol}: {len(self.input_positions)} args, {len(self.symbol_mapping)} symbols"
 
 
 @dataclass
@@ -256,11 +260,11 @@ class YieldType(enum.Enum):
 @dataclass
 class YieldData:
     yield_type: YieldType
-    recursion_depth: int
+    call_depth: int
     message: str
 
     def __str__(self) -> str:
-        return f"{self.recursion_depth * '.'}{self.yield_type.name} {self.message}"
+        return f"{self.call_depth * '.'}{self.yield_type.name} {self.message}"
 
 
 ExecuteGenReturnType = Generator[YieldData, None, LangType]
@@ -271,15 +275,15 @@ def _handle_choose_gen(
     choose_op: ChoosePrimitive,
     input_positions: List[GeneralizedPosition],
     function_mapping: Dict[str, PossibleFunc],
-    recursion_depth: int,
+    call_depth: int,
 ) -> ExecuteGenReturnType:
     """Handles the lazy evaluation of the ChoosePrimitive."""
     resolved_condition = yield from _execute_gen(
-        current_func, input_positions[0], function_mapping, recursion_depth + 1
+        current_func, input_positions[0], function_mapping, call_depth + 1
     )
     chosen_pos = choose_op(resolved_condition, input_positions[1], input_positions[2])
     ret_val = yield from _execute_gen(
-        current_func, chosen_pos, function_mapping, recursion_depth + 1
+        current_func, chosen_pos, function_mapping, call_depth + 1
     )
     return ret_val
 
@@ -288,13 +292,13 @@ def _resolve_all_inputs_gen(
     current_func: FunctionFrame,
     input_positions: List[GeneralizedPosition],
     function_mapping: Dict[str, PossibleFunc],
-    recursion_depth: int,
+    call_depth: int,
 ) -> Generator[YieldData, None, List[LangType]]:
     """Recursively executes all inputs and returns the resulting constants."""
     ret_val: List[LangType] = []
     for input_pos in input_positions:
         item_val = yield from _execute_gen(
-            current_func, input_pos, function_mapping, recursion_depth + 1
+            current_func, input_pos, function_mapping, call_depth + 1
         )
         ret_val.append(item_val)
 
@@ -306,11 +310,11 @@ def _handle_operation_gen(
     operation: Operation,
     input_positions: List[GeneralizedPosition],
     function_mapping: Dict[str, PossibleFunc],
-    recursion_depth: int,
+    call_depth: int,
 ) -> ExecuteGenReturnType:
     """Resolves all inputs and applies the operation to them."""
     resolved_inputs = yield from _resolve_all_inputs_gen(
-        current_func, input_positions, function_mapping, recursion_depth
+        current_func, input_positions, function_mapping, call_depth
     )
     return operation(*resolved_inputs)
 
@@ -320,15 +324,15 @@ def _handle_user_function_gen(
     user_function: Function,
     input_positions: List[GeneralizedPosition],
     function_mapping: Dict[str, PossibleFunc],
-    recursion_depth: int,
+    call_depth: int,
 ) -> ExecuteGenReturnType:
     """Resolves all inputs and executes a user-defined function in a new frame."""
     resolved_inputs = yield from _resolve_all_inputs_gen(
-        current_func, input_positions, function_mapping, recursion_depth
+        current_func, input_positions, function_mapping, call_depth
     )
     new_frame = FunctionFrame(user_function, resolved_inputs)
     ret_val = yield from _execute_gen(
-        new_frame, ENTRY_POINT, function_mapping, recursion_depth + 1
+        new_frame, ENTRY_POINT, function_mapping, call_depth + 1
     )
     return ret_val
 
@@ -337,9 +341,11 @@ def _execute_gen(
     current_func: FunctionFrame,
     pos: GeneralizedPosition,
     function_mapping: Dict[str, PossibleFunc],
-    recursion_depth: int,
+    call_depth: int,
 ) -> ExecuteGenReturnType:
-    yield YieldData(YieldType.FUNCTION_ENTRY, recursion_depth, f"pos: {pos}")
+    yield YieldData(
+        YieldType.FUNCTION_ENTRY, call_depth, str(current_func.function_reference)
+    )
 
     symbol_or_const_on_pos, pos = current_func.get_symbol_for_pos(pos)
 
@@ -349,58 +355,58 @@ def _execute_gen(
         function_on_pos = symbol_or_const_on_pos
 
     if isinstance(function_on_pos, LangType):
-        yield YieldData(YieldType.RETURN, recursion_depth, str(function_on_pos))
+        yield YieldData(YieldType.RETURN, call_depth, str(function_on_pos))
         return function_on_pos
 
     input_positions = current_func.function_reference.input_mapping[pos]
 
     if isinstance(function_on_pos, ChoosePrimitive):
-        yield YieldData(YieldType.RECURSIVE_CALL, recursion_depth, str(function_on_pos))
+        yield YieldData(YieldType.RECURSIVE_CALL, call_depth, str(function_on_pos))
         choose_val = yield from _handle_choose_gen(
             current_func,
             function_on_pos,
             input_positions,
             function_mapping,
-            recursion_depth,
+            call_depth,
         )
         yield YieldData(
             YieldType.GOT_BACK_FROM_RECURSIVE_CALL,
-            recursion_depth,
+            call_depth,
             str(function_on_pos),
         )
-        yield YieldData(YieldType.RETURN, recursion_depth, str(choose_val))
+        yield YieldData(YieldType.RETURN, call_depth, str(choose_val))
         return choose_val
     elif isinstance(function_on_pos, Operation):
-        yield YieldData(YieldType.RECURSIVE_CALL, recursion_depth, str(function_on_pos))
+        yield YieldData(YieldType.RECURSIVE_CALL, call_depth, str(function_on_pos))
         op_val = yield from _handle_operation_gen(
             current_func,
             function_on_pos,
             input_positions,
             function_mapping,
-            recursion_depth,
+            call_depth,
         )
         yield YieldData(
             YieldType.GOT_BACK_FROM_RECURSIVE_CALL,
-            recursion_depth,
+            call_depth,
             str(function_on_pos),
         )
-        yield YieldData(YieldType.RETURN, recursion_depth, str(op_val))
+        yield YieldData(YieldType.RETURN, call_depth, str(op_val))
         return op_val
     elif isinstance(function_on_pos, Function):
-        yield YieldData(YieldType.RECURSIVE_CALL, recursion_depth, str(function_on_pos))
+        yield YieldData(YieldType.RECURSIVE_CALL, call_depth, str(function_on_pos))
         func_val = yield from _handle_user_function_gen(
             current_func,
             function_on_pos,
             input_positions,
             function_mapping,
-            recursion_depth,
+            call_depth,
         )
         yield YieldData(
             YieldType.GOT_BACK_FROM_RECURSIVE_CALL,
-            recursion_depth,
+            call_depth,
             str(function_on_pos),
         )
-        yield YieldData(YieldType.RETURN, recursion_depth, str(func_val))
+        yield YieldData(YieldType.RETURN, call_depth, str(func_val))
         return func_val
     else:
         raise TypeError(f"Unexpected type at position {pos}: {type(function_on_pos)}")
