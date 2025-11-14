@@ -408,12 +408,13 @@ def _execute_gen(
 
 def execute_entry(
     current_func: Function,
-    pos: GeneralizedPosition,
     function_mapping: Dict[str, PossibleFunc],
     args: List[LangType],
 ) -> LangType:
     func_frame: FunctionFrame = FunctionFrame(current_func, args)
-    gen_obj: ExecuteGenReturnType = _execute_gen(func_frame, pos, function_mapping, 0)
+    gen_obj: ExecuteGenReturnType = _execute_gen(
+        func_frame, ENTRY_POINT, function_mapping, 0
+    )
     while True:
         try:
             trace = next(gen_obj)

@@ -194,7 +194,7 @@ def test_4():
         "8": 8,
     }
 
-    execute_entry(function1, ENTRY_POINT, function_mapping, [1, 2])
+    execute_entry(function1, function_mapping, [1, 2])
 
 
 if __name__ == "__main__":
