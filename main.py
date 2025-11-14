@@ -232,13 +232,16 @@ def _handle_choose_gen(
     choose_op: ChoosePrimitive,
     input_positions: List[GeneralizedPosition],
     function_mapping: Dict[str, PossibleFunc],
+    recursion_depth: int,
 ) -> ExecuteGenReturnType:
     """Handles the lazy evaluation of the ChoosePrimitive."""
     resolved_condition = yield from _execute_gen(
-        current_func, input_positions[0], function_mapping
+        current_func, input_positions[0], function_mapping, recursion_depth + 1
     )
     chosen_pos = choose_op(resolved_condition, input_positions[1], input_positions[2])
-    ret_val = yield from _execute_gen(current_func, chosen_pos, function_mapping)
+    ret_val = yield from _execute_gen(
+        current_func, chosen_pos, function_mapping, recursion_depth + 1
+    )
     return ret_val
 
 
@@ -246,11 +249,14 @@ def _resolve_all_inputs_gen(
     current_func: FunctionFrame,
     input_positions: List[GeneralizedPosition],
     function_mapping: Dict[str, PossibleFunc],
+    recursion_depth: int,
 ) -> Generator[str, None, List[LangType]]:
     """Recursively executes all inputs and returns the resulting constants."""
     ret_val: List[LangType] = []
     for input_pos in input_positions:
-        item_val = yield from _execute_gen(current_func, input_pos, function_mapping)
+        item_val = yield from _execute_gen(
+            current_func, input_pos, function_mapping, recursion_depth + 1
+        )
         ret_val.append(item_val)
 
     return ret_val
@@ -261,10 +267,11 @@ def _handle_operation_gen(
     operation: Operation,
     input_positions: List[GeneralizedPosition],
     function_mapping: Dict[str, PossibleFunc],
+    recursion_depth: int,
 ) -> ExecuteGenReturnType:
     """Resolves all inputs and applies the operation to them."""
     resolved_inputs = yield from _resolve_all_inputs_gen(
-        current_func, input_positions, function_mapping
+        current_func, input_positions, function_mapping, recursion_depth
     )
     return operation(*resolved_inputs)
 
@@ -274,13 +281,16 @@ def _handle_user_function_gen(
     user_function: Function,
     input_positions: List[GeneralizedPosition],
     function_mapping: Dict[str, PossibleFunc],
+    recursion_depth: int,
 ) -> ExecuteGenReturnType:
     """Resolves all inputs and executes a user-defined function in a new frame."""
     resolved_inputs = yield from _resolve_all_inputs_gen(
-        current_func, input_positions, function_mapping
+        current_func, input_positions, function_mapping, recursion_depth
     )
     new_frame = FunctionFrame(user_function, resolved_inputs)
-    ret_val = yield from _execute_gen(new_frame, ENTRY_POINT, function_mapping)
+    ret_val = yield from _execute_gen(
+        new_frame, ENTRY_POINT, function_mapping, recursion_depth + 1
+    )
     return ret_val
 
 
@@ -288,6 +298,7 @@ def _execute_gen(
     current_func: FunctionFrame,
     pos: GeneralizedPosition,
     function_mapping: Dict[str, PossibleFunc],
+    recursion_depth: int,
 ) -> ExecuteGenReturnType:
     symbol_or_const_on_pos, pos = current_func.get_symbol_for_pos(pos)
 
@@ -303,17 +314,29 @@ def _execute_gen(
 
     if isinstance(function_on_pos, ChoosePrimitive):
         choose_val = yield from _handle_choose_gen(
-            current_func, function_on_pos, input_positions, function_mapping
+            current_func,
+            function_on_pos,
+            input_positions,
+            function_mapping,
+            recursion_depth,
         )
         return choose_val
     elif isinstance(function_on_pos, Operation):
         op_val = yield from _handle_operation_gen(
-            current_func, function_on_pos, input_positions, function_mapping
+            current_func,
+            function_on_pos,
+            input_positions,
+            function_mapping,
+            recursion_depth,
         )
         return op_val
     elif isinstance(function_on_pos, Function):
         func_val = yield from _handle_user_function_gen(
-            current_func, function_on_pos, input_positions, function_mapping
+            current_func,
+            function_on_pos,
+            input_positions,
+            function_mapping,
+            recursion_depth,
         )
         return func_val
     else:
@@ -327,7 +350,7 @@ def execute_entry(
     args: List[LangType],
 ) -> LangType:
     func_frame: FunctionFrame = FunctionFrame(current_func, args)
-    gen_obj: ExecuteGenReturnType = _execute_gen(func_frame, pos, function_mapping)
+    gen_obj: ExecuteGenReturnType = _execute_gen(func_frame, pos, function_mapping, 0)
     while True:
         try:
             trace = next(gen_obj)
