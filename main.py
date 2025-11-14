@@ -11,6 +11,7 @@ from typing import (
     Final,
 )
 from dataclasses import dataclass
+import enum
 
 
 LangType = Union[int, tuple]
@@ -100,6 +101,9 @@ class SpecialPosition:
     def __eq__(self, value: object) -> bool:
         return isinstance(value, SpecialPosition) and value.hash_arg == self.hash_arg
 
+    def __str__(self) -> str:
+        return self.hash_arg
+
 
 GeneralizedPosition = Union[Position, SpecialPosition]
 
@@ -167,6 +171,9 @@ class Operation:
     def __eq__(self, value: object) -> bool:
         return type(value) is type(self)
 
+    def __str__(self) -> str:
+        return "IMPLEMENT_OPERATION_STR"
+
 
 class OperationCompare(Operation):
     def __call__(self, *args: Any, **kwds: Any) -> LangType:
@@ -174,6 +181,9 @@ class OperationCompare(Operation):
 
     def __hash__(self) -> int:
         return hash(">")
+
+    def __str__(self) -> str:
+        return "≥"
 
 
 class OperationPlus(Operation):
@@ -183,6 +193,9 @@ class OperationPlus(Operation):
     def __hash__(self) -> int:
         return hash("+")
 
+    def __str__(self) -> str:
+        return "+"
+
 
 class OperationMinus(Operation):
     def __call__(self, *args: Any, **kwds: Any) -> LangType:
@@ -191,6 +204,9 @@ class OperationMinus(Operation):
     def __hash__(self) -> int:
         return hash("-")
 
+    def __str__(self) -> str:
+        return "-"
+
 
 class OperationNest(Operation):
     def __call__(self, *args: Any, **kwds: Any) -> LangType:
@@ -198,6 +214,9 @@ class OperationNest(Operation):
 
     def __hash__(self) -> int:
         return hash("~")
+
+    def __str__(self) -> str:
+        return "~"
 
 
 class ChoosePrimitive:
@@ -214,6 +233,9 @@ class ChoosePrimitive:
         else:
             return pos2
 
+    def __str__(self) -> str:
+        return "?"
+
     def __hash__(self) -> int:
         return hash("?")
 
@@ -224,7 +246,24 @@ class ChoosePrimitive:
 PossibleFunc = Union[Operation, LangType, Function, ChoosePrimitive]
 
 
-ExecuteGenReturnType = Generator[str, None, LangType]
+class YieldType(enum.Enum):
+    FUNCTION_ENTRY = enum.auto()
+    RECURSIVE_CALL = enum.auto()
+    GOT_BACK_FROM_RECURSIVE_CALL = enum.auto()
+    RETURN = enum.auto()
+
+
+@dataclass
+class YieldData:
+    yield_type: YieldType
+    recursion_depth: int
+    message: str
+
+    def __str__(self) -> str:
+        return f"{self.recursion_depth * '.'}{self.yield_type.name} {self.message}"
+
+
+ExecuteGenReturnType = Generator[YieldData, None, LangType]
 
 
 def _handle_choose_gen(
@@ -250,7 +289,7 @@ def _resolve_all_inputs_gen(
     input_positions: List[GeneralizedPosition],
     function_mapping: Dict[str, PossibleFunc],
     recursion_depth: int,
-) -> Generator[str, None, List[LangType]]:
+) -> Generator[YieldData, None, List[LangType]]:
     """Recursively executes all inputs and returns the resulting constants."""
     ret_val: List[LangType] = []
     for input_pos in input_positions:
@@ -300,6 +339,8 @@ def _execute_gen(
     function_mapping: Dict[str, PossibleFunc],
     recursion_depth: int,
 ) -> ExecuteGenReturnType:
+    yield YieldData(YieldType.FUNCTION_ENTRY, recursion_depth, f"pos: {pos}")
+
     symbol_or_const_on_pos, pos = current_func.get_symbol_for_pos(pos)
 
     if isinstance(symbol_or_const_on_pos, str):
@@ -308,11 +349,13 @@ def _execute_gen(
         function_on_pos = symbol_or_const_on_pos
 
     if isinstance(function_on_pos, LangType):
+        yield YieldData(YieldType.RETURN, recursion_depth, str(function_on_pos))
         return function_on_pos
 
     input_positions = current_func.function_reference.input_mapping[pos]
 
     if isinstance(function_on_pos, ChoosePrimitive):
+        yield YieldData(YieldType.RECURSIVE_CALL, recursion_depth, str(function_on_pos))
         choose_val = yield from _handle_choose_gen(
             current_func,
             function_on_pos,
@@ -320,8 +363,15 @@ def _execute_gen(
             function_mapping,
             recursion_depth,
         )
+        yield YieldData(
+            YieldType.GOT_BACK_FROM_RECURSIVE_CALL,
+            recursion_depth,
+            str(function_on_pos),
+        )
+        yield YieldData(YieldType.RETURN, recursion_depth, str(choose_val))
         return choose_val
     elif isinstance(function_on_pos, Operation):
+        yield YieldData(YieldType.RECURSIVE_CALL, recursion_depth, str(function_on_pos))
         op_val = yield from _handle_operation_gen(
             current_func,
             function_on_pos,
@@ -329,8 +379,15 @@ def _execute_gen(
             function_mapping,
             recursion_depth,
         )
+        yield YieldData(
+            YieldType.GOT_BACK_FROM_RECURSIVE_CALL,
+            recursion_depth,
+            str(function_on_pos),
+        )
+        yield YieldData(YieldType.RETURN, recursion_depth, str(op_val))
         return op_val
     elif isinstance(function_on_pos, Function):
+        yield YieldData(YieldType.RECURSIVE_CALL, recursion_depth, str(function_on_pos))
         func_val = yield from _handle_user_function_gen(
             current_func,
             function_on_pos,
@@ -338,6 +395,12 @@ def _execute_gen(
             function_mapping,
             recursion_depth,
         )
+        yield YieldData(
+            YieldType.GOT_BACK_FROM_RECURSIVE_CALL,
+            recursion_depth,
+            str(function_on_pos),
+        )
+        yield YieldData(YieldType.RETURN, recursion_depth, str(func_val))
         return func_val
     else:
         raise TypeError(f"Unexpected type at position {pos}: {type(function_on_pos)}")
