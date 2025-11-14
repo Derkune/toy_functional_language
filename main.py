@@ -14,7 +14,15 @@ from dataclasses import dataclass
 import enum
 
 
-LangType = Union[int, tuple]
+@dataclass
+class CriticalError:
+    err_name: str
+
+    def __str__(self) -> str:
+        return self.err_name
+
+
+LangType = Union[int, tuple, CriticalError]
 
 
 Pick_B = True
@@ -223,6 +231,17 @@ class OperationNest(Operation):
         return "~"
 
 
+class OperationIdentity(Operation):
+    def __call__(self, *args: Any, **kwds: Any) -> LangType:
+        return args[0]
+
+    def __hash__(self) -> int:
+        return hash("=")
+
+    def __str__(self) -> str:
+        return "="
+
+
 class ChoosePrimitive:
     """Evaluates the 0th argument, and chooses 1st or 2nd to evaluate and return"""
 
@@ -251,7 +270,7 @@ PossibleFunc = Union[Operation, LangType, Function, ChoosePrimitive]
 
 
 class YieldType(enum.Enum):
-    FUNCTION_ENTRY = enum.auto()
+    INSIDE_FUNCTION = enum.auto()
     FUNCTION_CALL = enum.auto()
     GOT_BACK_FROM_FUNCTION_CALL = enum.auto()
     RETURN = enum.auto()
@@ -337,14 +356,28 @@ def _handle_user_function_gen(
     return ret_val
 
 
+STACK_LIMIT: Final[int] = 200
+
+
+class StackOverflowException(Exception):
+    pass
+
+
+def check_call_depth(stack_depth: int) -> None:
+    if stack_depth >= STACK_LIMIT:
+        raise StackOverflowException()
+
+
 def _execute_gen(
     current_func: FunctionFrame,
     pos: GeneralizedPosition,
     function_mapping: Dict[str, PossibleFunc],
     call_depth: int,
 ) -> ExecuteGenReturnType:
+    check_call_depth(call_depth)
+
     yield YieldData(
-        YieldType.FUNCTION_ENTRY, call_depth, str(current_func.function_reference)
+        YieldType.INSIDE_FUNCTION, call_depth, str(current_func.function_reference)
     )
 
     symbol_or_const_on_pos, pos = current_func.get_symbol_for_pos(pos)
@@ -428,6 +461,9 @@ def execute_entry(
         except StopIteration as e:
             print(f"\nFinal Result: {e.value}")
             return e.value
+        except StackOverflowException as e:
+            print(f"\nOverflowed the stack limit of {STACK_LIMIT}!")
+            return CriticalError("STACK_OVERFLOW")
 
 
 def main():

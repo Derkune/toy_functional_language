@@ -1,5 +1,9 @@
 from typing import Dict
 
+import sys
+
+print(sys.getrecursionlimit())
+
 from main import (
     LangType,
     Lang_choice_comparison,
@@ -18,6 +22,7 @@ from main import (
     OperationMinus,
     OperationNest,
     ChoosePrimitive,
+    OperationIdentity,
 )
 
 
@@ -216,8 +221,28 @@ def test_5():
     NEST_ARG0 = (2, 2)
     ADD_IN_RECURSIVE_STEP = (3, 3)
     RECURSIVE_CALL = (4, 4)
+    RECURSIVE_INTERMEDIARY = (7, 7)
     SUBTRACT_1_FROM_ARG0 = (5, 5)
     ONE = (6, 6)
+    F2_NESTING = (8, 8)
+
+    function3 = Function(
+        symbol="f3",
+        symbol_mapping={(-1, -1): "f1", (-2, -2): "f1"},
+        input_mapping={ENTRY_POINT: [(-1, -1)], (-1, -1): [(-2, -2)], (-2, -2): [ARG0]},
+        input_positions=[ARG0],
+    )
+
+    function2 = Function(
+        symbol="f2",
+        symbol_mapping={RECURSIVE_CALL: "f1", F2_NESTING: "="},
+        input_mapping={
+            ENTRY_POINT: [F2_NESTING],
+            RECURSIVE_CALL: [ARG0],
+            F2_NESTING: [RECURSIVE_CALL],
+        },
+        input_positions=[ARG0],
+    )
 
     function1 = Function(
         symbol="f1",
@@ -225,30 +250,33 @@ def test_5():
             CHOOSE: "?",
             NEST_ARG0: "~",
             ADD_IN_RECURSIVE_STEP: "+",
-            RECURSIVE_CALL: "f1",
+            RECURSIVE_INTERMEDIARY: "f2",
             SUBTRACT_1_FROM_ARG0: "-",
             ONE: "1",
         },
         input_mapping={
             ENTRY_POINT: [CHOOSE],
             CHOOSE: [ARG0, ADD_IN_RECURSIVE_STEP, NEST_ARG0],
-            ADD_IN_RECURSIVE_STEP: [NEST_ARG0, RECURSIVE_CALL],
+            ADD_IN_RECURSIVE_STEP: [NEST_ARG0, RECURSIVE_INTERMEDIARY],
             NEST_ARG0: [ARG0],
-            RECURSIVE_CALL: [SUBTRACT_1_FROM_ARG0],
+            RECURSIVE_INTERMEDIARY: [SUBTRACT_1_FROM_ARG0],
             SUBTRACT_1_FROM_ARG0: [ARG0, ONE],
         },
         input_positions=[ARG0],
     )
     function_mapping: Dict[str, PossibleFunc] = {
         "f1": function1,
+        "f2": function2,
         "+": OperationPlus(),
         "~": OperationNest(),
         "?": ChoosePrimitive(),
         "-": OperationMinus(),
         "1": 1,
+        "=": OperationIdentity(),
+        "f3": function3,
     }
 
-    execute_entry(function1, function_mapping, [3])
+    execute_entry(function3, function_mapping, [10])
 
 
 if __name__ == "__main__":
