@@ -1,4 +1,4 @@
-from typing import Any, Union, Tuple, Dict, Tuple, List, Callable, Optional
+from typing import Any, Union, Tuple, Dict, Tuple, List, Callable, Optional, Generator
 from dataclasses import dataclass
 
 
@@ -142,7 +142,7 @@ def _resolve_all_inputs(
 ) -> List[Constant]:
     """Recursively executes all inputs and returns the resulting constants."""
     return [
-        execute(current_func, input_pos, function_mapping)
+        execute_(current_func, input_pos, function_mapping)
         for input_pos in input_positions
     ]
 
@@ -154,9 +154,9 @@ def _handle_choose(
     function_mapping: Dict[str, PossibleFunc],
 ) -> Constant:
     """Handles the lazy evaluation of the ChoosePrimitive."""
-    resolved_condition = execute(current_func, input_positions[0], function_mapping)
+    resolved_condition = execute_(current_func, input_positions[0], function_mapping)
     chosen_pos = choose_op(resolved_condition, input_positions[1], input_positions[2])
-    return execute(current_func, chosen_pos, function_mapping)
+    return execute_(current_func, chosen_pos, function_mapping)
 
 
 def _handle_operation(
@@ -183,10 +183,10 @@ def _handle_user_function(
         current_func, input_positions, function_mapping
     )
     new_frame = FunctionFrame(user_function, resolved_inputs)
-    return execute(new_frame, ENTRY_POINT, function_mapping)
+    return execute_(new_frame, ENTRY_POINT, function_mapping)
 
 
-def execute(
+def execute_(
     current_func: FunctionFrame,
     pos: Position,
     function_mapping: Dict[str, PossibleFunc],
@@ -219,6 +219,113 @@ def execute(
         )
     else:
         raise TypeError(f"Unexpected type at position {pos}: {type(function_on_pos)}")
+
+
+ExecuteGenReturnType = Generator[str, None, Constant]
+
+
+def _handle_choose_gen(
+    current_func: FunctionFrame,
+    choose_op: ChoosePrimitive,
+    input_positions: List[Position],
+    function_mapping: Dict[str, PossibleFunc],
+) -> ExecuteGenReturnType:
+    """Handles the lazy evaluation of the ChoosePrimitive."""
+    resolved_condition = yield from _execute_gen(
+        current_func, input_positions[0], function_mapping
+    )
+    chosen_pos = choose_op(resolved_condition, input_positions[1], input_positions[2])
+    ret_val = yield from _execute_gen(current_func, chosen_pos, function_mapping)
+    return ret_val
+
+
+def _resolve_all_inputs_gen(
+    current_func: FunctionFrame,
+    input_positions: List[Position],
+    function_mapping: Dict[str, PossibleFunc],
+) -> Generator[str, None, List[Constant]]:
+    """Recursively executes all inputs and returns the resulting constants."""
+    ret_val: List[Constant] = []
+    for input_pos in input_positions:
+        item_val = yield from _execute_gen(current_func, input_pos, function_mapping)
+        ret_val.append(item_val)
+
+    return ret_val
+
+
+def _handle_operation_gen(
+    current_func: FunctionFrame,
+    operation: Operation,
+    input_positions: List[Position],
+    function_mapping: Dict[str, PossibleFunc],
+) -> ExecuteGenReturnType:
+    """Resolves all inputs and applies the operation to them."""
+    resolved_inputs = yield from _resolve_all_inputs_gen(
+        current_func, input_positions, function_mapping
+    )
+    return operation(*resolved_inputs)
+
+
+def _handle_user_function_gen(
+    current_func: FunctionFrame,
+    user_function: Function,
+    input_positions: List[Position],
+    function_mapping: Dict[str, PossibleFunc],
+) -> ExecuteGenReturnType:
+    """Resolves all inputs and executes a user-defined function in a new frame."""
+    resolved_inputs = yield from _resolve_all_inputs_gen(
+        current_func, input_positions, function_mapping
+    )
+    new_frame = FunctionFrame(user_function, resolved_inputs)
+    ret_val = yield from _execute_gen(new_frame, ENTRY_POINT, function_mapping)
+    return ret_val
+
+
+def _execute_gen(
+    current_func: FunctionFrame,
+    pos: Position,
+    function_mapping: Dict[str, PossibleFunc],
+) -> ExecuteGenReturnType:
+    symbol_on_pos = current_func.get_symbol_for_pos(pos)
+    function_on_pos = function_mapping[symbol_on_pos]
+
+    if isinstance(function_on_pos, Constant):
+        return function_on_pos
+
+    input_positions = current_func.function_reference.input_mapping[pos]
+
+    if isinstance(function_on_pos, ChoosePrimitive):
+        choose_val = yield from _handle_choose_gen(
+            current_func, function_on_pos, input_positions, function_mapping
+        )
+        return choose_val
+    elif isinstance(function_on_pos, Operation):
+        op_val = yield from _handle_operation_gen(
+            current_func, function_on_pos, input_positions, function_mapping
+        )
+        return op_val
+    elif isinstance(function_on_pos, Function):
+        func_val = yield from _handle_user_function_gen(
+            current_func, function_on_pos, input_positions, function_mapping
+        )
+        return func_val
+    else:
+        raise TypeError(f"Unexpected type at position {pos}: {type(function_on_pos)}")
+
+
+def execute_entry(
+    current_func: FunctionFrame,
+    pos: Position,
+    function_mapping: Dict[str, PossibleFunc],
+) -> Constant:
+    gen_obj: ExecuteGenReturnType = _execute_gen(current_func, pos, function_mapping)
+    while True:
+        try:
+            trace = next(gen_obj)
+            print(trace)
+        except StopIteration as e:
+            print(f"\nFinal Result: {e.value}")
+            return e.value
 
 
 def main():
